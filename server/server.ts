@@ -6,7 +6,12 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
-import { fileURLToPath } from 'url'; // Import necessary function
+import { fileURLToPath } from 'url';
+// Import Prisma Client using the standard path
+import { PrismaClient } from '@prisma/client';
+// Import auth libraries
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
 // ES Module equivalent for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -29,17 +34,31 @@ if (dotenvResult.error) {
 console.log("DEBUG: Value of VITE_ELEVENLABS_API_KEY in process.env after dotenv.config:", process.env.VITE_ELEVENLABS_API_KEY);
 // --- End Debugging ---
 
+// Instantiate Prisma Client
+const prisma = new PrismaClient();
+
 const app = express();
 const PORT = process.env.PORT || 3001; // Use a different port than the frontend
 
 const ELEVENLABS_API_KEY = process.env.VITE_ELEVENLABS_API_KEY; // Assuming key is named this in .env.local
 const ELEVENLABS_API_BASE_URL = 'https://api.elevenlabs.io/v1';
 
+// Load secrets and check
+const JWT_SECRET = process.env.JWT_SECRET;
+
 if (!ELEVENLABS_API_KEY) {
     console.error('Error: VITE_ELEVENLABS_API_KEY not found or empty in process.env. Please check .env.local file and path.');
     // process.exit(1); // Optional: exit if key is missing
 } else {
     console.log('ElevenLabs API Key seems loaded into process.env.');
+}
+
+if (!JWT_SECRET) {
+    console.error('CRITICAL Error: JWT_SECRET not found or empty in process.env. Please add it to your .env file.');
+    // In production, you should absolutely exit here
+    // process.exit(1);
+} else {
+     console.log('JWT Secret seems loaded.');
 }
 
 // Middleware
@@ -52,6 +71,105 @@ const storage = multer.memoryStorage();
 const upload = multer({ 
     storage: storage,
     limits: { fileSize: 50 * 1024 * 1024 } // Limit file size (e.g., 50MB)
+});
+
+// --- Authentication Routes ---
+
+// Register a new user
+app.post('/api/auth/register', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        res.status(400).json({ error: 'Email and password are required' });
+        return;
+    }
+
+    try {
+        // Check if user already exists
+        const existingUser = await prisma.user.findUnique({
+            where: { email: email.toLowerCase() }, // Store emails lowercase
+        });
+
+        if (existingUser) {
+            res.status(409).json({ error: 'User with this email already exists' });
+            return;
+        }
+
+        // Hash password
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // Create user
+        const newUser = await prisma.user.create({
+            data: {
+                email: email.toLowerCase(),
+                password: hashedPassword,
+            },
+        });
+
+        console.log(`User registered: ${newUser.email}`);
+        // Do NOT send password hash back
+        res.status(201).json({ message: 'User registered successfully', userId: newUser.id }); 
+
+    } catch (error) {
+        console.error("Registration error:", error);
+        next(new Error('Failed to register user'));
+    }
+});
+
+// Login an existing user
+app.post('/api/auth/login', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!JWT_SECRET) {
+        // Added check here as well, though initial check should catch it
+        console.error('Login attempt failed: JWT_SECRET is not configured.');
+        next(new Error('Authentication configuration error'));
+        return;
+    }
+
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        res.status(400).json({ error: 'Email and password are required' });
+        return;
+    }
+
+    try {
+        // Find user by email
+        const user = await prisma.user.findUnique({
+            where: { email: email.toLowerCase() },
+        });
+
+        if (!user) {
+            res.status(401).json({ error: 'Invalid email or password' }); // Generic message for security
+            return;
+        }
+
+        // Compare password with hash
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            res.status(401).json({ error: 'Invalid email or password' }); // Generic message
+            return;
+        }
+
+        // Passwords match, create JWT
+        const tokenPayload = { 
+            userId: user.id,
+            email: user.email 
+        };
+        const token = jwt.sign(
+            tokenPayload, 
+            JWT_SECRET,
+            { expiresIn: '1d' } // Token expires in 1 day (adjust as needed)
+        );
+
+        console.log(`User logged in: ${user.email}`);
+        res.json({ message: 'Login successful', token: token, userId: user.id, email: user.email });
+
+    } catch (error) {
+        console.error("Login error:", error);
+        next(new Error('Failed to login user'));
+    }
 });
 
 // --- API Endpoints ---
