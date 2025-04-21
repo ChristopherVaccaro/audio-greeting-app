@@ -11,10 +11,23 @@ class ElevenLabsService {
   }
 
   getApiKey(): string | null {
-    if (!this.apiKey) {
-      this.apiKey = sessionStorage.getItem('elevenlabs_api_key');
+    // Return in-memory key if already set
+    if (this.apiKey) {
+      return this.apiKey;
     }
-    return this.apiKey;
+    // Try sessionStorage
+    const stored = sessionStorage.getItem('elevenlabs_api_key');
+    if (stored) {
+      this.apiKey = stored;
+      return this.apiKey;
+    }
+    // Fallback to environment variable (VITE_ELEVENLABS_API_KEY)
+    const envKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+    if (envKey) {
+      this.apiKey = envKey;
+      return this.apiKey;
+    }
+    return null;
   }
 
   async getVoices() {
