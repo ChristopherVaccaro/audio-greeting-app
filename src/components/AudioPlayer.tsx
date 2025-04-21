@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, Volume2, Download } from 'lucide-react';
 import Button from './Button';
 
@@ -15,165 +15,262 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   
-  // Keep references to audio context and nodes to prevent recreating them
+  // Refs for audio context and nodes
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
+  // Helper to ensure AudioContext exists and is resumed
+  const ensureAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      try {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        console.log("AudioContext created.");
+      } catch (e) {
+        console.error("Error creating AudioContext:", e);
+        return null;
+      }
+    }
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch(e => console.error("Error resuming AudioContext:", e));
+    }
+    return audioContextRef.current;
+  }, []);
+
+  // Effect 1: Basic audio element event listeners & state reset
   useEffect(() => {
-    if (!audioRef.current) return;
-    
     const audio = audioRef.current;
-    
-    const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
-    };
-    
-    const handleTimeUpdate = () => {
-      setProgress(audio.currentTime);
-    };
-    
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => setDuration(audio.duration);
+    const handleTimeUpdate = () => setProgress(audio.currentTime);
     const handleEnded = () => {
       setIsPlaying(false);
       setProgress(0);
-      audio.currentTime = 0;
+      // Optional: Reset currentTime to allow replaying from start easily
+      // audio.currentTime = 0; 
     };
-    
+
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
-    
+
+    // Reset state when audioUrl changes
+    setProgress(0);
+    setDuration(0);
+    setIsPlaying(false);
+
+    // Cleanup listeners and pause audio
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
+      audio.pause();
     };
-  }, [audioUrl]);
+  }, [audioUrl]); // Runs only when audioUrl changes
 
+  // Effect 2: Audio node setup (triggered by audio readiness)
   useEffect(() => {
-    if (!canvasRef.current || !audioRef.current || !audioUrl) return;
-    
-    // Clean up previous audio nodes if they exist
-    if (sourceRef.current) {
-      sourceRef.current.disconnect();
-      sourceRef.current = null;
-    }
-    
-    if (analyserRef.current) {
-      analyserRef.current.disconnect();
-      analyserRef.current = null;
-    }
-    
-    // Create or reuse AudioContext
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    
-    // Setup audio visualization
     const audio = audioRef.current;
-    const audioContext = audioContextRef.current;
-    
-    // Create new nodes
-    analyserRef.current = audioContext.createAnalyser();
-    sourceRef.current = audioContext.createMediaElementSource(audio);
-    
-    // Connect the nodes
-    sourceRef.current.connect(analyserRef.current);
-    analyserRef.current.connect(audioContext.destination);
-    
-    const analyser = analyserRef.current;
-    analyser.fftSize = 256;
+    // Exit if no audio element or URL
+    if (!audio || !audioUrl) {
+       // Ensure nodes are disconnected if element/URL is removed
+       if (sourceRef.current) sourceRef.current.disconnect();
+       if (analyserRef.current) analyserRef.current.disconnect();
+       sourceRef.current = null;
+       analyserRef.current = null;
+       return;
+    }
+
+    const setupAudioNodes = () => {
+      const audioContext = ensureAudioContext();
+      if (!audioContext) return; // Stop if context failed
+
+      // Prevent re-setup if source already exists for this element/context
+      if (sourceRef.current) {
+          console.log("Audio nodes already set up.");
+          return;
+      }
+
+      console.log("Attempting to create and connect audio nodes...");
+      try {
+        sourceRef.current = audioContext.createMediaElementSource(audio);
+        analyserRef.current = audioContext.createAnalyser();
+        sourceRef.current.connect(analyserRef.current);
+        analyserRef.current.connect(audioContext.destination);
+        analyserRef.current.fftSize = 256;
+        console.log("Audio nodes created and connected successfully.");
+      } catch (error) {
+        console.error("Error setting up audio nodes:", error);
+        // Clean up refs on error
+        if (sourceRef.current) sourceRef.current.disconnect();
+        if (analyserRef.current) analyserRef.current.disconnect();
+        sourceRef.current = null;
+        analyserRef.current = null;
+      }
+    };
+
+    // Use 'canplaythrough' event to ensure the element is ready
+    const handleCanPlayThrough = () => {
+      console.log("'canplaythrough' event fired.");
+      setupAudioNodes();
+    };
+
+    // Check if audio is already ready
+    if (audio.readyState >= 4) { // HAVE_ENOUGH_DATA
+      console.log("Audio readyState >= 4, setting up nodes immediately.");
+      setupAudioNodes();
+    } else {
+      console.log(`Audio not ready (readyState: ${audio.readyState}), adding 'canplaythrough' listener.`);
+      audio.addEventListener('canplaythrough', handleCanPlayThrough);
+    }
+
+    // Cleanup function for this effect
+    return () => {
+      console.log("Cleaning up node setup effect for:", audioUrl);
+      audio.removeEventListener('canplaythrough', handleCanPlayThrough); // Remove listener
+
+      // Disconnect nodes when audioUrl changes or component unmounts
+      if (sourceRef.current) {
+        console.log("Disconnecting source node.");
+        sourceRef.current.disconnect();
+        sourceRef.current = null;
+      }
+      if (analyserRef.current) {
+        console.log("Disconnecting analyser node.");
+        analyserRef.current.disconnect();
+        analyserRef.current = null;
+      }
+    };
+    // Rerun when audioUrl changes or the context helper potentially changes (though stable due to useCallback)
+  }, [audioUrl, ensureAudioContext]);
+
+  // Effect 3: Visualization rendering loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const analyser = analyserRef.current; // Get current analyser ref
+
+    // Conditions to *not* run the animation: no canvas, no analyser, or not playing
+    if (!canvas || !analyser || !isPlaying) {
+        // Ensure any previous animation is cancelled
+        if (animationRef.current) {
+            cancelAnimationFrame(animationRef.current);
+            animationRef.current = undefined;
+        }
+        // Optional: Clear canvas or draw an inactive state when not animating
+        if (canvas) { 
+          const canvasCtx = canvas.getContext('2d');
+          if (canvasCtx) { // Check context was obtained
+              canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+              // Draw a flat line for inactive state
+              canvasCtx.beginPath();
+              canvasCtx.moveTo(0, canvas.height / 2);
+              canvasCtx.lineTo(canvas.width, canvas.height / 2);
+              canvasCtx.strokeStyle = '#A5B4FC'; // Lighter indigo
+              canvasCtx.lineWidth = 1;
+              canvasCtx.stroke();
+          }
+        }
+        return; // Stop the effect here
+    }
+
+    // Setup for rendering
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
-    
-    const canvas = canvasRef.current;
     const canvasCtx = canvas.getContext('2d');
-    
-    if (!canvasCtx) return;
-    
+    if (!canvasCtx) return; // Should have canvas context if canvas exists
+
+    let isActive = true; // Flag to control the loop persistence
+
     const renderFrame = () => {
-      animationRef.current = requestAnimationFrame(renderFrame);
-      
-      analyser.getByteFrequencyData(dataArray);
-      
-      canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      const barWidth = (canvas.width / bufferLength) * 2.5;
-      let x = 0;
-      
-      // Only draw visualization when playing
-      if (isPlaying) {
-        for (let i = 0; i < bufferLength; i++) {
-          const barHeight = (dataArray[i] / 255) * canvas.height;
-          
-          // Gradient for bars - cool blue/purple when quiet, warm when loud
-          const hue = 240 - (dataArray[i] / 255) * 60; 
-          canvasCtx.fillStyle = `hsl(${hue}, 70%, 60%)`;
-          
-          canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-          x += barWidth + 1;
+        // Stop if no longer active, analyser disconnected, or not playing
+        if (!isActive || !analyserRef.current || !isPlaying) {
+            animationRef.current = undefined;
+            return;
         }
-      } else {
-        // Draw a simple flat line when not playing
-        canvasCtx.beginPath();
-        canvasCtx.moveTo(0, canvas.height / 2);
-        canvasCtx.lineTo(canvas.width, canvas.height / 2);
-        canvasCtx.strokeStyle = '#6366F1';
-        canvasCtx.lineWidth = 2;
-        canvasCtx.stroke();
-      }
+
+        animationRef.current = requestAnimationFrame(renderFrame);
+
+        // Get data and draw
+        analyserRef.current.getByteFrequencyData(dataArray);
+        canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let x = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            const barHeight = (dataArray[i] / 255) * canvas.height;
+            const hue = 240 - (dataArray[i] / 255) * 60;
+            canvasCtx.fillStyle = `hsl(${hue}, 70%, 60%)`;
+            canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+            x += barWidth + 1;
+        }
     };
-    
-    renderFrame();
-    
+
+    renderFrame(); // Start the animation
+
+    // Cleanup function for this effect instance
     return () => {
+      console.log("Cleaning up animation frame.");
+      isActive = false; // Signal loop to stop
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
-      }
-      
-      // Disconnect audio nodes
-      if (sourceRef.current) {
-        sourceRef.current.disconnect();
-      }
-      
-      if (analyserRef.current) {
-        analyserRef.current.disconnect();
+        animationRef.current = undefined;
       }
     };
-  }, [audioUrl, isPlaying]);
+    // Rerun when isPlaying changes or the analyser instance potentially changes
+  }, [isPlaying, analyserRef]);
 
-  // Clean up when component unmounts
+
+  // Effect 4: Unmount cleanup for AudioContext
   useEffect(() => {
     return () => {
-      if (sourceRef.current) {
-        sourceRef.current.disconnect();
+      console.log("AudioPlayer unmounting. Closing AudioContext.");
+      // Nodes disconnected by Effect 2 cleanup. Close the context.
+      const audioContext = audioContextRef.current;
+      if (audioContext && audioContext.state !== 'closed') {
+        audioContext.close().catch(e => console.error("Error closing AudioContext on unmount:", e));
       }
-      
-      if (analyserRef.current) {
-        analyserRef.current.disconnect();
-      }
-      
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      audioContextRef.current = null;
     };
-  }, []);
+  }, []); // Empty dependency array: runs only on unmount
 
-  const togglePlayPause = () => {
-    if (!audioRef.current) return;
-    
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
+  // Toggle Play/Pause handler
+  const togglePlayPause = useCallback(() => {
+    const audio = audioRef.current;
+    const analyser = analyserRef.current; // Check if analyser is ready
+    const source = sourceRef.current;     // Check if source is ready
+
+    // Exit if essential elements/nodes aren't ready
+    if (!audio || !audioUrl || !analyser || !source) {
+        console.warn("Cannot toggle play/pause: Audio element or nodes not ready.");
+        // Optionally try ensuring context here, but node setup effect should handle it
+        // ensureAudioContext();
+        return;
     }
-    
-    setIsPlaying(!isPlaying);
-  };
+
+    // Ensure context is running (important for resuming playback after pause/suspension)
+    const audioContext = ensureAudioContext();
+    if (!audioContext) {
+         console.error("Cannot toggle play/pause: AudioContext not available.");
+         return;
+    }
+
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      audio.play()
+        .then(() => {
+          setIsPlaying(true);
+        })
+        .catch(e => {
+          console.error("Error playing audio:", e);
+          setIsPlaying(false); // Reset state on error
+        });
+    }
+  }, [isPlaying, audioUrl, ensureAudioContext]); // Dependencies
 
   const handleDownload = () => {
     if (!audioUrl) return;
-    
     const link = document.createElement('a');
     link.href = audioUrl;
     link.download = 'audio-greeting.mp3';
@@ -188,6 +285,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Conditional rendering for loading/generated states
   if (!audioUrl) {
     return (
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 flex items-center justify-center min-h-[200px]">
@@ -206,9 +304,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
     );
   }
 
+  // Main player UI
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-      <audio ref={audioRef} src={audioUrl} />
+      <audio ref={audioRef} src={audioUrl} crossOrigin="anonymous" preload="metadata"/>
       
       <div className="mb-4">
         <canvas 
@@ -224,6 +323,8 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
           onClick={togglePlayPause} 
           variant="primary"
           icon={isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          // Disable button briefly if nodes aren't ready? Might be complex UX.
+          // disabled={!sourceRef.current || !analyserRef.current} 
         >
           {isPlaying ? 'Pause' : 'Play'}
         </Button>
@@ -238,14 +339,14 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
         </Button>
         
         <div className="ml-auto text-sm text-gray-500">
-          {formatTime(progress)} / {formatTime(duration)}
+          {formatTime(progress)} / {formatTime(duration || 0)}
         </div>
       </div>
       
       <div className="w-full bg-gray-200 rounded-full h-1.5">
         <div 
           className="bg-indigo-600 h-1.5 rounded-full transition-all duration-100"
-          style={{ width: `${(progress / duration) * 100}%` }}
+          style={{ width: `${duration > 0 ? (progress / duration) * 100 : 0}%` }}
         ></div>
       </div>
     </div>
