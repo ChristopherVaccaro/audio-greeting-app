@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import Header from './components/Header';
 import TextToSpeechForm from './components/TextToSpeechForm';
 import VoiceCloningForm from './components/VoiceCloningForm';
@@ -8,9 +8,11 @@ import ApiKeyModal from './components/ApiKeyModal';
 import EmailModal from './components/EmailModal';
 import ShareLinkModal from './components/ShareLinkModal';
 import Footer from './components/Footer';
+import LoginForm from './components/LoginForm';
+import RegisterForm from './components/RegisterForm';
 import elevenlabsService from './services/elevenlabsService';
-import { getVoices, generateTTS, ElevenLabsVoice, AddVoiceResponse } from './services/elevenlabs';
-import { AudioState } from './types';
+import { getVoices, generateTTS, ElevenLabsVoice, AddVoiceResponse, AuthResponse } from './services/elevenlabs';
+import { AudioState, CurrentUser } from './types';
 
 function App() {
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
@@ -27,41 +29,108 @@ function App() {
   const [isLoadingVoices, setIsLoadingVoices] = useState(true);
   const [voicesError, setVoicesError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const apiKey = elevenlabsService.getApiKey();
-    if (!apiKey) {
-      setApiKeyModalOpen(true);
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    return localStorage.getItem('authToken');
+  });
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => {
+    const storedUser = localStorage.getItem('currentUser');
+    try {
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch {
+      return null;
     }
-    fetchVoices();
-  }, []);
+  });
+  const [authView, setAuthView] = useState<'login' | 'register'>('login');
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
 
-  const fetchVoices = useCallback(async () => {
+  const fetchVoices = async (token: string | null) => {
+    if (!token) {
+      setVoices([]);
+      setIsLoadingVoices(false);
+      setVoicesError('Please log in to load voices.');
+      return;
+    }
     setIsLoadingVoices(true);
     setVoicesError(null);
     try {
-      const fetchedVoices = await getVoices();
+      const fetchedVoices = await getVoices(token);
       setVoices(fetchedVoices);
     } catch (error: any) {
       console.error('Error fetching voices:', error);
-      setVoicesError(error.message || 'Failed to load voices. Check backend connection.');
+      setVoicesError(error.message || 'Failed to load voices.');
+      if (error.message.includes('Unauthorized')) {
+        setVoicesError('Session expired or invalid. Please log out and log back in.');
+      }
     } finally {
       setIsLoadingVoices(false);
     }
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    const userJson = localStorage.getItem('currentUser');
+    if (token && userJson) {
+      try {
+        setAuthToken(token);
+        setCurrentUser(JSON.parse(userJson));
+        fetchVoices(token);
+      } catch {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('currentUser');
+        setAuthToken(null);
+        setCurrentUser(null);
+      }
+    } else {
+      setIsLoadingVoices(false);
+    }
+    setAuthLoading(false);
+  }, []);
+
+  const handleLoginSuccess = useCallback((data: AuthResponse) => {
+    console.log('Login successful', data);
+    const { token, ...userData } = data;
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('currentUser', JSON.stringify(userData));
+    setAuthToken(token);
+    setCurrentUser(userData);
+    setAuthView('login');
+    fetchVoices(token);
+  }, []);
+
+  const handleRegisterSuccess = useCallback(() => {
+    console.log('Registration successful');
+    setAuthView('login');
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    console.log('Logging out');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('currentUser');
+    setAuthToken(null);
+    setCurrentUser(null);
+    setVoices([]);
+    setVoicesError(null);
+    setAuthView('login');
   }, []);
 
   const handleVoiceCloned = useCallback((newVoice: AddVoiceResponse) => {
     console.log('New voice cloned, refetching voices list...');
-    fetchVoices();
-  }, [fetchVoices]);
+    if (authToken) {
+      fetchVoices(authToken);
+    } else {
+      console.warn('Cannot refetch voices, user not logged in.');
+    }
+  }, [authToken]);
 
   const handleApiKeySubmit = (apiKey: string) => {
-    elevenlabsService.setApiKey(apiKey);
-    if (voices.length === 0) {
-        fetchVoices();
-    }
+    console.log('API Key modal submitted - functionality might need review');
   };
 
   const handleGenerateAudio = async (data: { voiceId: string; message: string }) => {
+    if (!authToken) {
+      setAudioState(prev => ({ ...prev, error: 'Please log in to generate audio.' }));
+      return;
+    }
     setAudioState({
       isGenerating: true,
       isPlaying: false,
@@ -70,7 +139,7 @@ function App() {
     });
 
     try {
-      const audioBlob = await generateTTS(data.voiceId, data.message);
+      const audioBlob = await generateTTS(data.voiceId, data.message, authToken);
       const audioUrl = URL.createObjectURL(audioBlob);
       
       setAudioState({
@@ -84,8 +153,8 @@ function App() {
       let errorMessage = 'An error occurred while generating the audio.';
       if (error instanceof Error) {
         errorMessage = error.message; 
-        if (error.message.includes('API key not configured')) {
-           console.warn('Backend reported API key issue.');
+        if (error.message.includes('Unauthorized')) {
+          handleLogout();
         }
       }
       setAudioState({
@@ -105,9 +174,40 @@ function App() {
     setShareLinkModalOpen(true);
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="h-12 w-12 text-indigo-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!authToken || !currentUser) {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center bg-gray-100 p-4">
+        {authView === 'login' ? (
+          <LoginForm 
+            onLoginSuccess={handleLoginSuccess} 
+            switchToRegister={() => setAuthView('register')} 
+          />
+        ) : (
+          <RegisterForm 
+            onRegisterSuccess={handleRegisterSuccess} 
+            switchToLogin={() => setAuthView('login')} 
+          />
+        )}
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <Header onOpenApiKeyModal={() => setApiKeyModalOpen(true)} />
+      <Header 
+        onOpenApiKeyModal={() => setApiKeyModalOpen(true)} 
+        user={currentUser}
+        onLogout={handleLogout}
+      />
       
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -170,12 +270,6 @@ function App() {
       </main>
       
       <Footer />
-      
-      <ApiKeyModal 
-        isOpen={apiKeyModalOpen}
-        onClose={() => setApiKeyModalOpen(false)}
-        onSubmit={handleApiKeySubmit}
-      />
       
       <EmailModal 
         isOpen={emailModalOpen}

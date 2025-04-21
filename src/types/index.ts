@@ -23,3 +23,8 @@ export type GreetingFormData = {
   occasionId: string;
   voiceId: string;
 };
+
+export interface CurrentUser {
+  userId: string;
+  email: string;
+}
