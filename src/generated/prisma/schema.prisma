@@ -1,0 +1,36 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid()) // Unique ID for the user
+  email     String   @unique // User's email, must be unique
+  password  String // Hashed password (NEVER store plain text)
+  createdAt DateTime @default(now()) // Timestamp when user was created
+  updatedAt DateTime @updatedAt // Timestamp when user was last updated
+
+  // You can add relations to other models later, e.g., cloned voices
+  // voices    Voice[]
+}
+
+// Example for a Voice model if you want to store them
+// model Voice {
+//   id        String   @id @default(cuid())
+//   userId    String                   // Foreign key linking to User
+//   user      User     @relation(fields: [userId], references: [id])
+//   voiceId   String   @unique          // ID from ElevenLabs
+//   name      String
+//   createdAt DateTime @default(now())
+// }

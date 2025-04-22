@@ -25,39 +25,77 @@ export interface VoiceSettings {
     use_speaker_boost?: boolean; // Optional: For models supporting speaker boost
 }
 
+// Ensure Auth interfaces are exported
+export interface AuthResponse {
+    message: string;
+    token: string;
+    userId: string;
+    email: string;
+}
+
+export interface RegisterResponse {
+    message: string;
+    userId: string;
+}
+
+// Helper function to get token from localStorage
+const getAuthToken = (): string | null => {
+    return localStorage.getItem('authToken');
+};
+
 /**
  * Fetches the list of available voices from the backend.
  */
 export const getVoices = async (): Promise<ElevenLabsVoice[]> => {
+    const token = getAuthToken();
+    // Note: This route is currently public on the backend, but adding token anyway for consistency
+    // or if we decide to protect it later.
+    const headers: Record<string, string> = {};
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
     try {
-        const response = await axios.get<ElevenLabsVoice[]>(`${API_BASE_URL}/voices`);
+        const response = await axios.get<ElevenLabsVoice[]>(`${API_BASE_URL}/voices`, { headers });
         return response.data;
     } catch (error: any) {
         console.error('API Service Error (getVoices):', error.response?.data || error.message);
+        if (error.response?.status === 401 || error.response?.status === 403) {
+            throw new Error('Unauthorized: Invalid or expired token.');
+        }
         throw new Error(error.response?.data?.error || 'Failed to fetch voices');
     }
 };
 
 /**
  * Adds a new voice by uploading audio files.
- * @param formData - FormData object containing 'files' (File objects) and 'name' (string).
+ * Requires authentication.
  */
 export const addVoice = async (formData: FormData): Promise<AddVoiceResponse> => {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    } else {
+        // Should not happen if UI prevents call when logged out, but good failsafe
+        throw new Error('Unauthorized: Authentication token not found.');
+    }
+
     try {
-        const response = await axios.post<AddVoiceResponse>(`${API_BASE_URL}/voices`, formData, {
-            headers: {
-                // Content-Type is set automatically by browser for FormData
-            },
-        });
+        const response = await axios.post<AddVoiceResponse>(`${API_BASE_URL}/voices`, formData, { headers });
         return response.data;
     } catch (error: any) {
         console.error('API Service Error (addVoice):', error.response?.data || error.message);
+        if (error.response?.status === 401 || error.response?.status === 403) {
+            throw new Error('Unauthorized: Cannot add voice.');
+        }
         throw new Error(error.response?.data?.error || 'Failed to add voice');
     }
 };
 
 /**
  * Generates text-to-speech audio for a given voice ID and text.
+ * Requires authentication.
  * Returns the raw audio Blob.
  */
 export const generateTTS = async (
@@ -66,6 +104,16 @@ export const generateTTS = async (
     modelId?: string, // Optional: specify model e.g., 'eleven_multilingual_v2'
     voiceSettings?: VoiceSettings // Optional: fine-tune voice generation
 ): Promise<Blob> => {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {
+        'Accept': 'audio/mpeg'
+    };
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    } else {
+        throw new Error('Unauthorized: Authentication token not found.');
+    }
+
     try {
         const response = await axios.post(
             `${API_BASE_URL}/tts/${voiceId}`, 
@@ -75,40 +123,36 @@ export const generateTTS = async (
                 ...(voiceSettings && { voice_settings: voiceSettings }) 
             },
             {
-                responseType: 'blob', // Important: We want the raw audio data as a Blob
-                headers: {
-                    'Accept': 'audio/mpeg', // Let the server know we expect mp3
-                }
+                responseType: 'blob',
+                headers: headers
             }
         );
         
         if (response.data instanceof Blob && response.data.type === 'audio/mpeg') {
             return response.data;
         } else {
-             // If the response wasn't the expected blob (e.g., server sent JSON error)
-             console.error('API Service Error (generateTTS): Expected audio/mpeg Blob, received:', response.data);
-             // Try to parse as JSON error if possible
-             let errorMessage = 'Failed to generate TTS: Unexpected response format';
-             try {
-                // Blobs need to be read asynchronously
+            let errorMessage = 'Failed to generate TTS: Unexpected response format';
+            try {
                 if (response.data instanceof Blob) {
-                     const errorText = await response.data.text();
-                     try {
-                         const errorJson = JSON.parse(errorText);
-                         errorMessage = errorJson.error || errorJson.message || errorMessage;
-                     } catch (jsonParseError) {
-                         errorMessage = errorText || errorMessage; // Use raw text if not JSON
-                     }
+                    const errorText = await response.data.text();
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorMessage = errorJson.error || errorJson.message || errorMessage;
+                    } catch (jsonParseError) {
+                        errorMessage = errorText || errorMessage;
+                    }
                 }
-             } catch (blobReadError) {
-                 console.error("Error reading error blob:", blobReadError);
-             }
+            } catch (blobReadError) {
+                console.error("Error reading error blob:", blobReadError);
+            }
             throw new Error(errorMessage);
         }
 
     } catch (error: any) {
         console.error('API Service Error (generateTTS):', error.response?.data || error.message);
-        // Attempt to read error details if the response was a blob (e.g., error from server)
+        if (error.response?.status === 401 || error.response?.status === 403) {
+            throw new Error('Unauthorized: Cannot generate TTS.');
+        }
         if (error.response?.data instanceof Blob) {
             try {
                 const errorText = await error.response.data.text();
@@ -119,10 +163,32 @@ export const generateTTS = async (
                     throw new Error(errorText || 'Failed to generate TTS: Non-JSON error response');
                 }
             } catch (blobReadError) {
-                 throw new Error('Failed to generate TTS and could not read error details.');
+                throw new Error('Failed to generate TTS and could not read error details.');
             }
         } else {
             throw new Error(error.response?.data?.error || 'Failed to generate TTS');
         }
+    }
+};
+
+export const registerUser = async (email: string, password: string): Promise<RegisterResponse> => {
+    // ... implementation ...
+    try {
+        const response = await axios.post<RegisterResponse>(`${API_BASE_URL}/auth/register`, { email, password });
+        return response.data;
+    } catch (error: any) {
+        console.error('API Service Error (registerUser):', error.response?.data || error.message);
+        throw new Error(error.response?.data?.error || 'Registration failed');
+    }
+};
+
+export const loginUser = async (email: string, password: string): Promise<AuthResponse> => {
+    // ... implementation ...
+    try {
+        const response = await axios.post<AuthResponse>(`${API_BASE_URL}/auth/login`, { email, password });
+        return response.data;
+    } catch (error: any) {
+        console.error('API Service Error (loginUser):', error.response?.data || error.message);
+        throw new Error(error.response?.data?.error || 'Login failed');
     }
 }; 
