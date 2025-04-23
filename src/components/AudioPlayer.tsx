@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, Volume2, Download } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, RefreshCw, Download, Loader2 } from 'lucide-react';
 import Button from './Button';
 
 type AudioPlayerProps = {
@@ -20,6 +20,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
+  const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   // Helper to ensure AudioContext exists and is resumed
   const ensureAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -37,37 +40,64 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
     return audioContextRef.current;
   }, []);
 
-  // Effect 1: Basic audio element event listeners & state reset
+  // Reset state when audioUrl changes or generation starts
+  useEffect(() => {
+    setIsPlaying(false);
+    setProgress(0);
+    setDuration(0);
+    setError(null);
+    setIsLoadingMetadata(!!audioUrl); // Start loading if new URL
+
+    if (audioRef.current && audioUrl) {
+      audioRef.current.src = audioUrl;
+      audioRef.current.load(); // Important to load the new source
+    } else if (audioRef.current) {
+      audioRef.current.removeAttribute('src'); // Clear src if URL is null
+      audioRef.current.load();
+    }
+  }, [audioUrl]);
+
+  // Handle metadata loading
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const handleLoadedMetadata = () => setDuration(audio.duration);
-    const handleTimeUpdate = () => setProgress(audio.currentTime);
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setProgress(0);
-      // Optional: Reset currentTime to allow replaying from start easily
-      // audio.currentTime = 0; 
+    const handleLoadedMetadata = () => {
+      if (isFinite(audio.duration)) {
+        setDuration(audio.duration);
+        setIsLoadingMetadata(false);
+        setError(null);
+        console.log(`Audio metadata loaded: Duration=${audio.duration}`);
+      } else {
+        // Sometimes duration is Infinity initially
+        console.warn('Audio duration is Infinity initially, will retry on durationchange.');
+      }
+    };
+    const handleDurationChange = () => {
+       if (isFinite(audio.duration) && audio.duration > 0) {
+         setDuration(audio.duration);
+         setIsLoadingMetadata(false);
+         setError(null);
+         console.log(`Audio duration changed: Duration=${audio.duration}`);
+       } 
+    };
+
+    const handleError = (e: Event) => {
+      console.error("Audio Error:", audio.error);
+      setError(`Error loading audio: ${audio.error?.message || 'Unknown error'}`);
+      setIsLoadingMetadata(false);
     };
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('durationchange', handleDurationChange);
+    audio.addEventListener('error', handleError);
 
-    // Reset state when audioUrl changes
-    setProgress(0);
-    setDuration(0);
-    setIsPlaying(false);
-
-    // Cleanup listeners and pause audio
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('ended', handleEnded);
-      audio.pause();
+      audio.removeEventListener('durationchange', handleDurationChange);
+      audio.removeEventListener('error', handleError);
     };
-  }, [audioUrl]); // Runs only when audioUrl changes
+  }, [audioUrl]); // Rerun when URL changes
 
   // Effect 2: Audio node setup (triggered by audio readiness)
   useEffect(() => {
@@ -233,41 +263,97 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
     };
   }, []); // Empty dependency array: runs only on unmount
 
-  // Toggle Play/Pause handler
-  const togglePlayPause = useCallback(() => {
+  // Effect 5: Sync playback progress and state with audio element events
+  useEffect(() => {
     const audio = audioRef.current;
-    const analyser = analyserRef.current; // Check if analyser is ready
-    const source = sourceRef.current;     // Check if source is ready
+    if (!audio) return;
 
-    // Exit if essential elements/nodes aren't ready
-    if (!audio || !audioUrl || !analyser || !source) {
-        console.warn("Cannot toggle play/pause: Audio element or nodes not ready.");
-        // Optionally try ensuring context here, but node setup effect should handle it
-        // ensureAudioContext();
-        return;
-    }
+    const onTimeUpdate = () => {
+      setProgress(audio.currentTime);
+    };
+    const onPlay = () => {
+      setIsPlaying(true);
+    };
+    const onPause = () => {
+      setIsPlaying(false);
+    };
+    const onEnded = () => {
+      setIsPlaying(false);
+    };
 
-    // Ensure context is running (important for resuming playback after pause/suspension)
-    const audioContext = ensureAudioContext();
-    if (!audioContext) {
-         console.error("Cannot toggle play/pause: AudioContext not available.");
-         return;
-    }
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('ended', onEnded);
 
-    if (isPlaying) {
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('ended', onEnded);
+    };
+  }, [audioUrl]);
+
+  // Toggle Play/Pause handler
+  const togglePlayPause = () => {
+    const audio = audioRef.current;
+    if (!audio || !audioUrl || isGenerating || isLoadingMetadata || !!error) return;
+
+    // Helper functions to play and pause audio with state updates
+    const playAudio = () => {
+      audio.play()
+        .then(() => setIsPlaying(true))
+        .catch(e => console.error("Error playing audio:", e));
+    };
+    const pauseAudio = () => {
       audio.pause();
       setIsPlaying(false);
-    } else {
-      audio.play()
+    };
+
+    // Ensure AudioContext is active before playback
+    const context = ensureAudioContext();
+    if (context && context.state === 'suspended') {
+      context.resume()
         .then(() => {
-          setIsPlaying(true);
+          if (audio.paused) {
+            playAudio();
+          } else {
+            pauseAudio();
+          }
         })
-        .catch(e => {
-          console.error("Error playing audio:", e);
-          setIsPlaying(false); // Reset state on error
-        });
+        .catch(e => console.error("Error resuming AudioContext:", e));
+    } else {
+      if (audio.paused) {
+        playAudio();
+      } else {
+        pauseAudio();
+      }
     }
-  }, [isPlaying, audioUrl, ensureAudioContext]); // Dependencies
+  };
+
+  const handleTimeUpdate = () => {
+    const audio = audioRef.current;
+    if (audio) {
+      setProgress(audio.currentTime);
+    }
+  };
+  
+  // Add handleSeek function
+  const handleSeek = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current;
+    if (audio && isFinite(audio.duration)) {
+      const seekTime = Number(event.target.value);
+      audio.currentTime = seekTime;
+      setProgress(seekTime); // Update progress state immediately
+    }
+  };
+
+  const handleEnded = () => {
+    setIsPlaying(false);
+    // Optionally reset progress to 0 or keep it at the end
+    // setProgress(0);
+    // audioRef.current?.load(); // Reset for re-play if desired
+  };
 
   const handleDownload = () => {
     if (!audioUrl) return;
@@ -286,27 +372,43 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
   };
 
   // Conditional rendering for loading/generated states
+  if (isGenerating) {
+    return (
+      <div className="p-6 rounded-lg bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 flex items-center justify-center h-40">
+        <Loader2 className="h-8 w-8 text-indigo-600 dark:text-indigo-400 animate-spin" />
+        <span className="ml-3 text-gray-600 dark:text-gray-400">Generating audio...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-600/50 flex items-center justify-center h-40 text-center">
+         <span className="text-sm text-red-700 dark:text-red-300">{error}</span>
+      </div>
+    );
+  }
+
   if (!audioUrl) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 flex items-center justify-center min-h-[200px]">
-        {isGenerating ? (
-          <div className="flex flex-col items-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600 mb-4"></div>
-            <p className="text-gray-600">Generating your audio greeting...</p>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center">
-            <Volume2 className="h-12 w-12 text-gray-400 mb-3" />
-            <p className="text-gray-500">Preview your audio greeting after generation</p>
-          </div>
-        )}
+      <div className="p-6 rounded-lg bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 flex items-center justify-center h-40 text-center">
+        <span className="text-gray-500 dark:text-gray-400">No audio generated yet.</span>
+      </div>
+    );
+  }
+  
+  if (isLoadingMetadata) {
+    return (
+      <div className="p-6 rounded-lg bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 flex items-center justify-center h-40">
+         <Loader2 className="h-6 w-6 text-gray-500 dark:text-gray-400 animate-spin" />
+         <span className="ml-3 text-gray-500 dark:text-gray-400">Loading audio...</span>
       </div>
     );
   }
 
   // Main player UI
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+    <div className="p-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm space-y-3">
       <audio ref={audioRef} src={audioUrl} crossOrigin="anonymous" preload="metadata"/>
       
       <div className="mb-4">
@@ -318,37 +420,44 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, isGenerating }) => 
         />
       </div>
       
-      <div className="flex items-center mb-3">
+      <div className="flex items-center space-x-4">
         <Button 
           onClick={togglePlayPause} 
-          variant="primary"
-          icon={isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          // Disable button briefly if nodes aren't ready? Might be complex UX.
-          // disabled={!sourceRef.current || !analyserRef.current} 
+          disabled={!audioUrl || isGenerating || isLoadingMetadata || !!error}
+          variant="ghost"
+          size="sm"
+          className="p-2 rounded-full text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:text-gray-400 dark:disabled:text-gray-600"
         >
-          {isPlaying ? 'Pause' : 'Play'}
+          {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
         </Button>
-        
-        <Button 
-          onClick={handleDownload}
-          variant="outline" 
-          className="ml-3"
-          icon={<Download className="h-4 w-4" />}
-        >
-          Download
-        </Button>
-        
-        <div className="ml-auto text-sm text-gray-500">
-          {formatTime(progress)} / {formatTime(duration || 0)}
+
+        <div className="flex-grow">
+          <input 
+            type="range"
+            min="0"
+            max={duration || 1} // Use 1 if duration is 0 to prevent errors
+            value={progress}
+            onChange={handleSeek}
+            disabled={!audioUrl || isGenerating || isLoadingMetadata || !!error || duration === 0}
+            className="w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-600 dark:accent-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
         </div>
       </div>
-      
-      <div className="w-full bg-gray-200 rounded-full h-1.5">
-        <div 
-          className="bg-indigo-600 h-1.5 rounded-full transition-all duration-100"
-          style={{ width: `${duration > 0 ? (progress / duration) * 100 : 0}%` }}
-        ></div>
+
+      <div className="text-sm text-gray-500 dark:text-gray-400 mt-2 text-right">
+         {formatTime(progress)} / {formatTime(duration)}
       </div>
+
+      <Button 
+        onClick={handleDownload}
+        disabled={!audioUrl || isGenerating || isLoadingMetadata || !!error}
+        variant="outline"
+        size="sm"
+        icon={<Download className="h-4 w-4" />}
+        className="mt-4 w-full sm:w-auto"
+      >
+        Download Audio
+      </Button>
     </div>
   );
 };

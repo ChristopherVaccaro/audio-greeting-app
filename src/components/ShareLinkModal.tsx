@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Link, Copy, CheckCircle } from 'lucide-react';
 import Button from './Button';
 
@@ -9,75 +9,83 @@ type ShareLinkModalProps = {
 };
 
 const ShareLinkModal: React.FC<ShareLinkModalProps> = ({ isOpen, onClose, audioUrl }) => {
-  const [copied, setCopied] = useState(false);
+  const [shareableLink, setShareableLink] = useState<string>('');
+  const [isCopied, setIsCopied] = useState<boolean>(false);
   const linkInputRef = useRef<HTMLInputElement>(null);
 
-  if (!isOpen || !audioUrl) return null;
-
-  // In a real app, we would generate a shareable link to a permanent storage location
-  // For this demo, we'll just use the blob URL (which won't work for actual sharing)
-  const shareableLink = audioUrl;
-
-  const handleCopy = () => {
-    if (linkInputRef.current) {
-      linkInputRef.current.select();
-      document.execCommand('copy');
-      setCopied(true);
-      
-      // Reset copied state after 2 seconds
-      setTimeout(() => setCopied(false), 2000);
+  // Simulate generating a shareable link
+  // In a real app, this might involve uploading the blob and getting a permanent URL
+  useEffect(() => {
+    if (isOpen && audioUrl) {
+      // For now, just use the blob URL. This only works in the user's current browser session.
+      // A real implementation would require backend logic to store the audio and provide a persistent link.
+      setShareableLink(audioUrl);
+      setIsCopied(false); // Reset copied state when modal opens or URL changes
+    } else {
+      setShareableLink('');
     }
+  }, [isOpen, audioUrl]);
+
+  if (!isOpen) return null;
+
+  const handleCopyLink = () => {
+    if (!shareableLink) return;
+    navigator.clipboard.writeText(shareableLink).then(() => {
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000); // Reset icon after 2 seconds
+    }).catch(err => {
+      console.error('Failed to copy link: ', err);
+      // Optionally show an error message to the user
+    });
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+    <div className="fixed inset-0 bg-black bg-opacity-60 dark:bg-opacity-75 flex items-center justify-center p-4 z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
         <div className="p-6">
           <div className="flex items-center mb-4">
-            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mr-3">
-              <Link className="h-5 w-5 text-amber-600" />
+            <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mr-3">
+              <Link className="h-5 w-5 text-purple-600 dark:text-purple-400" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-800">Share via Link</h2>
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Share Audio Link</h2>
           </div>
           
-          <p className="text-gray-600 mb-6">
-            Copy this link to share your audio greeting with others. They'll be able to listen to your message directly.
-          </p>
+          {shareableLink ? (
+            <>
+              <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
+                Copy the link below to share your audio greeting.
+                <span className="block text-xs text-gray-400 dark:text-gray-500 mt-1">(Note: This link is temporary and only works in your current browser session).</span>
+              </p>
+              <div className="flex items-center space-x-2">
+                <input
+                  ref={linkInputRef}
+                  type="text"
+                  readOnly
+                  value={shareableLink}
+                  className="flex-grow block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 sm:text-sm focus:ring-0 focus:border-gray-300 dark:focus:border-gray-600 cursor-not-allowed"
+                  aria-label="Shareable audio link"
+                />
+                <Button
+                  variant="secondary"
+                  onClick={handleCopyLink}
+                  icon={isCopied ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                  aria-label={isCopied ? 'Copied' : 'Copy link'}
+                >
+                  {isCopied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              Generate an audio greeting first to get a shareable link.
+            </p>
+          )}
           
-          <div className="mb-4">
-            <label htmlFor="shareLink" className="block text-sm font-medium text-gray-700 mb-1">
-              Shareable Link
-            </label>
-            <div className="flex">
-              <input
-                ref={linkInputRef}
-                type="text"
-                id="shareLink"
-                value={shareableLink}
-                readOnly
-                className="block w-full rounded-l-md border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500"
-              />
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="inline-flex items-center px-4 py-2 border border-l-0 border-gray-300 rounded-r-md bg-gray-50 text-gray-700 hover:bg-gray-100"
-              >
-                {copied ? (
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                ) : (
-                  <Copy className="h-5 w-5" />
-                )}
-              </button>
-            </div>
-            {copied && (
-              <p className="mt-1 text-sm text-green-600">Link copied to clipboard!</p>
-            )}
-          </div>
-          
-          <div className="flex justify-end">
-            <Button type="button" onClick={onClose}>
+          <div className="flex justify-end space-x-3 mt-6">
+            <Button type="button" variant="outline" onClick={onClose}>
               Close
             </Button>
+            {/* Add other share options if needed */}
           </div>
         </div>
       </div>

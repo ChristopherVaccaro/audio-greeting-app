@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-import { AlertCircle, Loader2, Volume } from 'lucide-react';
+import { AlertCircle, Loader2, Volume, Moon, Sun } from 'lucide-react';
 import Header from './components/Header';
 import TextToSpeechForm from './components/TextToSpeechForm';
 import VoiceCloningForm from './components/VoiceCloningForm';
@@ -16,6 +16,34 @@ import { getVoices, generateTTS, ElevenLabsVoice, AddVoiceResponse, AuthResponse
 import { AudioState, CurrentUser } from './types/index';
 
 function App() {
+  // --- Theme State --- 
+  // Initialize theme based on localStorage or system preference
+  const [theme, setTheme] = useState(() => {
+    const storedTheme = localStorage.getItem('theme');
+    if (storedTheme) {
+      return storedTheme;
+    }
+    // Check system preference
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  // Effect to apply theme class and save preference
+  useEffect(() => {
+    const root = document.documentElement; // Get the <html> element
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+    console.log(`Theme set to: ${theme}`); // Debugging log
+  }, [theme]);
+
+  // Function to toggle theme
+  const toggleTheme = () => {
+    setTheme((prevTheme) => (prevTheme === 'light' ? 'dark' : 'light'));
+  };
+
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [shareLinkModalOpen, setShareLinkModalOpen] = useState(false);
@@ -215,19 +243,19 @@ function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <Loader2 className="h-12 w-12 animate-spin text-indigo-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-600 dark:text-blue-400" />
       </div>
     );
   }
 
   if (!authToken || !currentUser) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4">
          <div className="w-full max-w-md">
              <div className="text-center mb-8">
-                <Volume className="h-12 w-12 text-indigo-600 mx-auto" />
-                <h1 className="mt-4 text-3xl font-bold text-gray-900">AudioGreets</h1>
+                <Volume className="h-12 w-12 text-blue-600 dark:text-blue-400 mx-auto" />
+                <h1 className="mt-4 text-3xl font-bold text-gray-900 dark:text-gray-100">AudioGreets</h1>
              </div>
             {authView === 'login' ? (
                 <LoginForm
@@ -246,24 +274,26 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       <Header 
         onOpenApiKeyModal={() => setApiKeyModalOpen(true)} 
         currentUser={currentUser} 
         onLogout={handleLogout} 
+        toggleTheme={toggleTheme}
+        theme={theme}
       />
       
       <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {voicesError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start">
-                  <AlertCircle className="h-5 w-5 text-red-500 mr-3 flex-shrink-0 mt-0.5" />
+                <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900 dark:border-red-700 dark:text-red-200 rounded-lg p-4 mb-6 flex items-start">
+                  <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mr-3 flex-shrink-0 mt-0.5" />
                   <div className="flex-grow">
-                    <h3 className="text-sm font-medium text-red-800">Error Loading Voices</h3>
-                    <p className="text-red-700 mt-1">{voicesError}</p>
-                    <button onClick={() => fetchVoices(authToken)} className="mt-2 text-sm font-medium text-red-700 hover:underline">Retry</button>
+                    <h3 className="text-sm font-medium text-red-800 dark:text-red-100">Error Loading Voices</h3>
+                    <p className="text-red-700 dark:text-red-200 mt-1">{voicesError}</p>
+                    <button onClick={() => fetchVoices(authToken)} className="mt-2 text-sm font-medium text-red-700 dark:text-red-300 hover:underline dark:hover:text-red-100">Retry</button>
                   </div>
-                   <button onClick={() => setVoicesError(null)} className="ml-auto text-red-500 hover:text-red-700 p-1 -m-1">
+                   <button onClick={() => setVoicesError(null)} className="ml-auto text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 p-1 -m-1">
                      <span className="sr-only">Dismiss</span>
                      &times;
                    </button>
@@ -271,20 +301,20 @@ function App() {
               )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow border border-gray-200">
-               <h2 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-3">1. Add Custom Voice</h2>
+            <div className="lg:col-span-1 bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+               <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-6 border-b border-gray-200 dark:border-gray-700 pb-3">1. Add Custom Voice</h2>
                <VoiceCloningForm onVoiceCloned={handleVoiceCloned} />
             </div>
 
-            <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow border border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-3">2. Generate Greeting</h2>
+            <div className="lg:col-span-1 bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-6 border-b border-gray-200 dark:border-gray-700 pb-3">2. Generate Greeting</h2>
               {isLoadingVoices && !voicesError ? (
                  <div className="text-center py-10">
-                   <Loader2 className="h-6 w-6 animate-spin text-indigo-600 mx-auto" />
-                   <p className="mt-2 text-sm text-gray-500">Loading voices...</p>
+                   <Loader2 className="h-6 w-6 animate-spin text-blue-600 dark:text-blue-400 mx-auto" />
+                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading voices...</p>
                  </div>
               ) : voices.length === 0 && !voicesError && !isLoadingVoices ? (
-                 <div className="text-center py-10 text-gray-500">
+                 <div className="text-center py-10 text-gray-500 dark:text-gray-400">
                     <p>No voices found.</p>
                     <p className="text-sm mt-1">Add a custom voice in Step 1 or check your ElevenLabs account.</p>
                  </div>
@@ -302,14 +332,14 @@ function App() {
                ) : null }
             </div>
             
-            <div className="lg:col-span-1 bg-white p-6 rounded-lg shadow border border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800 mb-6 border-b pb-3">3. Preview & Share</h2>
+            <div className="lg:col-span-1 bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-6 border-b border-gray-200 dark:border-gray-700 pb-3">3. Preview & Share</h2>
               
               {audioState.error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start">
-                  <AlertCircle className="h-5 w-5 text-red-500 mr-3 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-700 flex-grow">{audioState.error}</p>
-                   <button onClick={() => setAudioState(prev => ({...prev, error: null}))} className="ml-auto text-red-500 hover:text-red-700 p-1 -m-1">
+                <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900 dark:border-red-700 dark:text-red-200 rounded-lg p-4 mb-6 flex items-start">
+                  <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mr-3 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700 dark:text-red-200 flex-grow">{audioState.error}</p>
+                   <button onClick={() => setAudioState(prev => ({...prev, error: null}))} className="ml-auto text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 p-1 -m-1">
                       <span className="sr-only">Dismiss</span>
                       &times;
                    </button>
@@ -322,15 +352,15 @@ function App() {
               />
               
               {audioState.audioUrl && !audioState.isGenerating && (
-                <div className="mt-6 bg-indigo-50 border border-indigo-100 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-indigo-800 mb-2">What's next?</h3>
-                  <p className="text-sm text-indigo-700">
+                <div className="mt-6 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800/50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">What's next?</h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-400">
                     Your audio greeting is ready! Use the buttons in Step 2 to share or download.
                   </p>
                 </div>
               )}
                {!audioState.audioUrl && !audioState.isGenerating && !audioState.error && (
-                 <div className="text-center py-10 text-gray-400">
+                 <div className="text-center py-10 text-gray-400 dark:text-gray-500">
                     <p>Generate an audio greeting in Step 2 to preview it here.</p>
                  </div>
                )}

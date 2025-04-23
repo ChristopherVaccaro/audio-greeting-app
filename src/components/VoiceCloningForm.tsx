@@ -1,5 +1,5 @@
 import React, { useState, useCallback, ChangeEvent, FormEvent, useRef, useEffect } from 'react';
-import { UploadCloud, Loader2, AlertCircle, Mic, Square, Play, Trash2 } from 'lucide-react';
+import { UploadCloud, Loader2, AlertCircle, Mic, Square, Play, Trash2, AlertTriangle, CheckCircle, FileAudio, Info } from 'lucide-react';
 import { addVoice, AddVoiceResponse } from '../services/elevenlabs';
 import Button from './Button';
 import FormField from './FormField';
@@ -241,26 +241,26 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
 
   // --- UI Rendering ---
   return (
-    <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-      <h2 className="text-xl font-semibold mb-4 text-gray-800">Create Instant Voice Clone</h2>
-      <p className="text-sm text-gray-600 mb-4">
+    <div className="bg-white p-6 rounded-lg shadow border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+      <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-300">Create Instant Voice Clone</h2>
+      <p className="text-sm text-gray-600 mb-4 dark:text-gray-400">
         Upload 1-30 audio samples (at least 1 minute total, without background noise) 
         or record directly using your microphone to create a voice clone.
       </p>
 
       {/* Mode Switcher */}
-      <div className="mb-4 flex border-b border-gray-200">
+      <div className="mb-4 flex border-b border-gray-200 dark:border-gray-700">
         <button
           type="button"
           onClick={() => setInputMode('upload')}
-          className={`py-2 px-4 text-sm font-medium ${inputMode === 'upload' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`py-2 px-4 text-sm font-medium ${inputMode === 'upload' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:border-indigo-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
         >
           Upload Files
         </button>
         <button
           type="button"
           onClick={() => setInputMode('record')}
-          className={`py-2 px-4 text-sm font-medium ${inputMode === 'record' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`py-2 px-4 text-sm font-medium ${inputMode === 'record' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:border-indigo-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
         >
           Record Audio
         </button>
@@ -280,21 +280,21 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
             placeholder="e.g., My Voice Clone"
             required
             disabled={isLoading}
-            className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50"
+            className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
           />
         </FormField>
 
         {/* === Upload Mode UI === */}
         {inputMode === 'upload' && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">
               Audio Samples (Upload)
             </label>
             {/* File Drop Zone */}
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md dark:border-gray-700">
               <div className="space-y-1 text-center">
-                <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
-                <div className="flex text-sm text-gray-600">
+                <UploadCloud className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+                <div className="flex text-sm text-gray-600 dark:text-gray-400">
                   <label
                     htmlFor="audio-files-input"
                     className={`relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -313,12 +313,12 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
                   </label>
                   <p className="pl-1">or drag and drop</p>
                 </div>
-                <p className="text-xs text-gray-500">MP3, WAV, FLAC, AAC, M4A etc. up to 50MB per file</p>
+                <p className="text-xs text-gray-500 dark:text-gray-500">MP3, WAV, FLAC, AAC, M4A etc. up to 50MB per file</p>
               </div>
             </div>
             {/* Selected Files Display */}
             {files && files.length > 0 && (
-              <div className="mt-2 text-sm text-gray-600">
+              <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                 <p className="font-medium">Selected files:</p>
                 <ul className="list-disc list-inside">
                   {Array.from(files).map((file, index) => (
@@ -333,7 +333,7 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
         {/* === Record Mode UI === */}
         {inputMode === 'record' && (
             <div className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Audio Samples (Record)
                 </label>
                  {/* Permission Handling */}
@@ -343,7 +343,7 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
                      </Button>
                  )}
                  {permissionGranted === false && (
-                     <p className="text-sm text-red-600">Microphone access denied. Please enable it in your browser settings.</p>
+                     <p className="text-sm text-red-600 dark:text-red-400">Microphone access denied. Please enable it in your browser settings.</p>
                  )}
 
                  {/* Recording Controls */}
@@ -353,14 +353,14 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
                              type="button" 
                              onClick={isRecording ? stopRecording : startRecording}
                              variant={isRecording ? "secondary" : "secondary"}
-                             className={isRecording ? 'text-red-600 hover:text-red-700' : ''}
+                             className={isRecording ? 'text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300' : ''}
                              icon={isRecording ? <Square className="h-4 w-4"/> : <Mic className="h-4 w-4"/>}
                              disabled={isLoading}
                          >
                            {isRecording ? 'Stop Recording' : 'Start Recording'}
                          </Button>
                          {isRecording && (
-                             <span className="text-sm text-red-600 animate-pulse">Recording...</span>
+                             <span className="text-sm text-red-600 animate-pulse dark:text-red-400">Recording...</span>
                          )}
                      </div>
                  )}
@@ -368,10 +368,10 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
                 {/* Display Recorded Clips */}
                 {recordedChunks.length > 0 && (
                     <div className="mt-2 space-y-2">
-                        <p className="text-sm font-medium text-gray-700">Recorded clips:</p>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Recorded clips:</p>
                         <ul className="list-decimal list-inside space-y-1">
                             {recordedChunks.map((blob, index) => (
-                                <li key={index} className="text-sm text-gray-600 flex items-center justify-between bg-gray-50 p-2 rounded">
+                                <li key={index} className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-2 rounded">
                                     <span>Clip {index + 1} ({(blob.size / 1024).toFixed(1)} KB)</span>
                                     <div>
                                         <Button 
@@ -387,7 +387,7 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
                                             variant="ghost" 
                                             size="sm"
                                             onClick={() => deleteRecording(index)}
-                                            className="text-red-500 hover:text-red-700"
+                                            className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                             icon={<Trash2 className="h-4 w-4"/>}
                                         ><></></Button>
                                     </div>
@@ -398,7 +398,7 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
                 )}
 
                 {recordingError && (
-                    <div className="flex items-center text-sm text-red-600">
+                    <div className="flex items-center text-sm text-red-600 dark:text-red-400">
                         <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
                         {recordingError}
                     </div>
@@ -408,10 +408,10 @@ const VoiceCloningForm: React.FC<VoiceCloningFormProps> = ({ onVoiceCloned }) =>
 
         {/* Status/Error Messages (Common) */}
         {statusMessage && !error && (
-          <div className="text-sm text-blue-600 bg-blue-50 p-3 rounded-md">{statusMessage}</div>
+          <div className="text-sm text-blue-600 bg-blue-50 p-3 rounded-md dark:bg-blue-900/30">{statusMessage}</div>
         )}
         {error && (
-           <div className="flex items-center text-sm text-red-600 bg-red-50 p-3 rounded-md">
+           <div className="flex items-center text-sm text-red-600 bg-red-50 p-3 rounded-md dark:bg-red-900/30">
              <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
              {error}
            </div>
