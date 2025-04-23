@@ -160,6 +160,7 @@ const config = {
       }
     }
   },
+
   "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\n// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?\n// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"../src/generated/prisma\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel User {\n  id        String   @id @default(cuid()) // Unique ID for the user\n  email     String   @unique // User's email, must be unique\n  password  String // Hashed password (NEVER store plain text)\n  createdAt DateTime @default(now()) // Timestamp when user was created\n  updatedAt DateTime @updatedAt // Timestamp when user was last updated\n\n  // You can add relations to other models later, e.g., cloned voices\n  // voices    Voice[]\n}\n\n// Example for a Voice model if you want to store them\n// model Voice {\n//   id        String   @id @default(cuid())\n//   userId    String                   // Foreign key linking to User\n//   user      User     @relation(fields: [userId], references: [id])\n//   voiceId   String   @unique          // ID from ElevenLabs\n//   name      String\n//   createdAt DateTime @default(now())\n// }\n",
   "inlineSchemaHash": "9e305f43d512ae91031308455f7a191d15001255404d2af5722e786e720ecb92",
   "copyEngine": true

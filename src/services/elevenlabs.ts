@@ -1,8 +1,10 @@
 import axios from 'axios';
 
 // Use the backend port defined in server.ts (default 3001)
-const API_BASE_URL = 'http://localhost:3001/api';
+// Renamed to reflect broader scope
+const API_BASE_URL = 'http://localhost:3001/api'; 
 
+// --- ElevenLabs Specific Interfaces ---
 export interface ElevenLabsVoice {
     voice_id: string;
     name: string;
@@ -69,6 +71,7 @@ export const getVoices = async (): Promise<ElevenLabsVoice[]> => {
 
 /**
  * Adds a new voice by uploading audio files.
+<<<<<< add-security-and-token-management
  * Requires authentication.
  */
 export const addVoice = async (formData: FormData): Promise<AddVoiceResponse> => {
@@ -101,8 +104,9 @@ export const addVoice = async (formData: FormData): Promise<AddVoiceResponse> =>
 export const generateTTS = async (
     voiceId: string, 
     text: string, 
-    modelId?: string, // Optional: specify model e.g., 'eleven_multilingual_v2'
-    voiceSettings?: VoiceSettings // Optional: fine-tune voice generation
+    token: string | null, // Added token parameter
+    modelId?: string, 
+    voiceSettings?: VoiceSettings
 ): Promise<Blob> => {
     const token = getAuthToken();
     const headers: Record<string, string> = {
@@ -147,7 +151,6 @@ export const generateTTS = async (
             }
             throw new Error(errorMessage);
         }
-
     } catch (error: any) {
         console.error('API Service Error (generateTTS):', error.response?.data || error.message);
         if (error.response?.status === 401 || error.response?.status === 403) {

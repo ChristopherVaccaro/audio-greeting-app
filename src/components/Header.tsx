@@ -2,13 +2,11 @@ import React from 'react';
 import { Volume, Settings, LogOut } from 'lucide-react';
 import Button from './Button';
 import { CurrentUser } from '../types';
-
 type HeaderProps = {
   onOpenApiKeyModal: () => void;
   currentUser: CurrentUser | null;
   onLogout: () => void;
 };
-
 const Header: React.FC<HeaderProps> = ({ onOpenApiKeyModal, currentUser, onLogout }) => {
   return (
     <header className="bg-white border-b border-gray-200 shadow-sm">
@@ -19,11 +17,6 @@ const Header: React.FC<HeaderProps> = ({ onOpenApiKeyModal, currentUser, onLogou
               <div className="flex items-center">
                 <Volume className="h-8 w-8 text-indigo-600" />
                 <span className="ml-2 text-xl font-bold text-gray-900">AudioGreets</span>
-              </div>
-            </div>
-            <div className="hidden md:block ml-6">
-              <div className="text-sm text-gray-500">
-                Create and share personalized audio greetings
               </div>
             </div>
           </div>

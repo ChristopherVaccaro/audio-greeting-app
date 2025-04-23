@@ -37,8 +37,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess, switchToRegister 
       setIsLoading(false);
     }
   };
-
-  // Ensure JSX is correct
+        
   return (
     <div className="w-full max-w-md mx-auto bg-white p-8 rounded-lg shadow border border-gray-200">
       <h2 className="text-2xl font-semibold text-center text-gray-800 mb-6">Log In</h2>
@@ -63,6 +62,4 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess, switchToRegister 
     </div>
   );
 };
-
-// Ensure default export is present
 export default LoginForm; 

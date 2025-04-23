@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+
 import { AlertCircle, Loader2, Volume } from 'lucide-react';
 import Header from './components/Header';
 import TextToSpeechForm from './components/TextToSpeechForm';
@@ -10,6 +11,7 @@ import ShareLinkModal from './components/ShareLinkModal';
 import Footer from './components/Footer';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
+
 import { getVoices, generateTTS, ElevenLabsVoice, AddVoiceResponse, AuthResponse } from './services/elevenlabs';
 import { AudioState, CurrentUser } from './types/index';
 
@@ -47,6 +49,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [selectedVoice, setSelectedVoice] = useState<ElevenLabsVoice | null>(null);
 
+
   const handleLogout = useCallback(() => {
     console.log('Logging out');
     localStorage.removeItem('authToken');
@@ -83,6 +86,7 @@ function App() {
       }
     } catch (error: any) {
       console.error('Error fetching voices:', error);
+
       const errorMessage = error.message || 'Failed to load voices.';
       setVoicesError(errorMessage);
       if (errorMessage.includes('Unauthorized')) { 
@@ -92,6 +96,7 @@ function App() {
     } finally {
       setIsLoadingVoices(false);
     }
+
   }, [handleLogout, selectedVoice]);
 
   useEffect(() => {
@@ -146,9 +151,9 @@ function App() {
 
   const switchToRegister = () => setAuthView('register');
   const switchToLogin = () => setAuthView('login');
-
   const handleVoiceCloned = (newVoice: AddVoiceResponse) => {
     console.log('New voice cloned, refetching voices list...');
+
     const currentToken = localStorage.getItem('authToken');
     if (currentToken) {
         fetchVoices(currentToken); 
@@ -180,6 +185,7 @@ function App() {
       error: null
     });
     try {
+
        const audioBlob = await generateTTS(data.voiceId, data.message); 
        const audioUrl = URL.createObjectURL(audioBlob);
        console.log("Audio generated successfully.");
@@ -210,14 +216,13 @@ function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <Loader2 className="h-12 w-12 animate-spin text-indigo-600" />
       </div>
     );
   }
 
   if (!authToken || !currentUser) {
     return (
+
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
          <div className="w-full max-w-md">
              <div className="text-center mb-8">
@@ -244,11 +249,12 @@ function App() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header 
         onOpenApiKeyModal={() => setApiKeyModalOpen(true)} 
+
         currentUser={currentUser} 
         onLogout={handleLogout} 
       />
       
-      <main className="flex-grow">
+      <className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {voicesError && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start">
@@ -332,15 +338,8 @@ function App() {
             </div>
           </div>
         </div>
-      </main>
-      
-      <Footer />
-      
-      <ApiKeyModal 
-        isOpen={apiKeyModalOpen}
-        onClose={() => setApiKeyModalOpen(false)}
-        onSubmit={handleApiKeySubmit}
-      />
+      </>
+  <Footer />
       
       <EmailModal 
         isOpen={emailModalOpen}

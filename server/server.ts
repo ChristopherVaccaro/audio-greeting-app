@@ -33,6 +33,7 @@ console.log("DEBUG: Value of VITE_ELEVENLABS_API_KEY in process.env after dotenv
 // --- End Debugging ---
 
 const prisma = new PrismaClient();
+
 const app = express();
 const PORT = process.env.PORT || 3001; // Use a different port than the frontend
 
@@ -40,11 +41,22 @@ const ELEVENLABS_API_KEY = process.env.VITE_ELEVENLABS_API_KEY; // Assuming key 
 const ELEVENLABS_API_BASE_URL = 'https://api.elevenlabs.io/v1';
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// Load secrets and check
+const JWT_SECRET = process.env.JWT_SECRET;
+
 if (!ELEVENLABS_API_KEY) {
     console.error('Error: VITE_ELEVENLABS_API_KEY not found or empty in process.env. Please check .env.local file and path.');
     // process.exit(1); // Optional: exit if key is missing
 } else {
     console.log('ElevenLabs API Key seems loaded into process.env.');
+}
+
+if (!JWT_SECRET) {
+    console.error('CRITICAL Error: JWT_SECRET not found or empty in process.env. Please add it to your .env file.');
+    // In production, you should absolutely exit here
+    // process.exit(1);
+} else {
+     console.log('JWT Secret seems loaded.');
 }
 
 // Middleware
@@ -58,6 +70,7 @@ const upload = multer({
     storage: storage,
     limits: { fileSize: 50 * 1024 * 1024 } // Limit file size (e.g., 50MB)
 });
+
 
 // Define a type for the user payload in the JWT
 interface JwtPayload {
@@ -231,6 +244,7 @@ app.post('/api/auth/register', registerHandler); // Pass the defined handler
 app.post('/api/auth/login', loginHandler);
 
 // --- Voice / TTS Routes ---
+
 
 // GET list of available voices
 app.get('/api/voices', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
