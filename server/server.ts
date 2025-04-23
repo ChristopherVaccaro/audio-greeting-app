@@ -41,8 +41,6 @@ const ELEVENLABS_API_KEY = process.env.VITE_ELEVENLABS_API_KEY; // Assuming key 
 const ELEVENLABS_API_BASE_URL = 'https://api.elevenlabs.io/v1';
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Load secrets and check
-const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!ELEVENLABS_API_KEY) {
     console.error('Error: VITE_ELEVENLABS_API_KEY not found or empty in process.env. Please check .env.local file and path.');

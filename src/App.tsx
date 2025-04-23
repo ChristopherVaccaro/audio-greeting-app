@@ -185,8 +185,7 @@ function App() {
       error: null
     });
     try {
-
-       const audioBlob = await generateTTS(data.voiceId, data.message); 
+       const audioBlob = await generateTTS(data.voiceId, data.message, currentToken); 
        const audioUrl = URL.createObjectURL(audioBlob);
        console.log("Audio generated successfully.");
        setAudioState({
@@ -216,13 +215,14 @@ function App() {
 
   if (authLoading) {
     return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <Loader2 className="h-12 w-12 animate-spin text-indigo-600" />
       </div>
     );
   }
 
   if (!authToken || !currentUser) {
     return (
-
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
          <div className="w-full max-w-md">
              <div className="text-center mb-8">
@@ -249,12 +249,11 @@ function App() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header 
         onOpenApiKeyModal={() => setApiKeyModalOpen(true)} 
-
         currentUser={currentUser} 
         onLogout={handleLogout} 
       />
       
-      <className="flex-grow">
+      <main className="flex-grow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {voicesError && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start">
@@ -338,8 +337,9 @@ function App() {
             </div>
           </div>
         </div>
-      </>
-  <Footer />
+      </main>
+
+      <Footer />
       
       <EmailModal 
         isOpen={emailModalOpen}
@@ -351,6 +351,12 @@ function App() {
         isOpen={shareLinkModalOpen}
         onClose={() => setShareLinkModalOpen(false)}
         audioUrl={audioState.audioUrl}
+      />
+
+      <ApiKeyModal 
+        isOpen={apiKeyModalOpen}
+        onClose={() => setApiKeyModalOpen(false)}
+        onSubmit={handleApiKeySubmit}
       />
     </div>
   );

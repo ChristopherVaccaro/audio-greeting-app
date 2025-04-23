@@ -71,7 +71,6 @@ export const getVoices = async (): Promise<ElevenLabsVoice[]> => {
 
 /**
  * Adds a new voice by uploading audio files.
-<<<<<< add-security-and-token-management
  * Requires authentication.
  */
 export const addVoice = async (formData: FormData): Promise<AddVoiceResponse> => {
@@ -104,18 +103,19 @@ export const addVoice = async (formData: FormData): Promise<AddVoiceResponse> =>
 export const generateTTS = async (
     voiceId: string, 
     text: string, 
-    token: string | null, // Added token parameter
+    token: string | null, // Use THIS token passed as argument
     modelId?: string, 
     voiceSettings?: VoiceSettings
 ): Promise<Blob> => {
-    const token = getAuthToken();
     const headers: Record<string, string> = {
         'Accept': 'audio/mpeg'
     };
-    if (token) {
+    if (token) { // Use the argument token here
         headers.Authorization = `Bearer ${token}`;
     } else {
-        throw new Error('Unauthorized: Authentication token not found.');
+        // This error should ideally not be hit if App.tsx checks first,
+        // but it's good fallback logic based on the passed token.
+        throw new Error('Unauthorized: Authentication token not provided to generateTTS.');
     }
 
     try {
@@ -128,7 +128,7 @@ export const generateTTS = async (
             },
             {
                 responseType: 'blob',
-                headers: headers
+                headers: headers // Headers now correctly use the argument token
             }
         );
         
