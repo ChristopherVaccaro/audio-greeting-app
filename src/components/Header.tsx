@@ -1,15 +1,13 @@
 import React from 'react';
-import { Volume, Settings, LogOut, UserCircle } from 'lucide-react';
+import { Volume, Settings, LogOut } from 'lucide-react';
 import Button from './Button';
 import { CurrentUser } from '../types';
-
 type HeaderProps = {
   onOpenApiKeyModal: () => void;
-  user: CurrentUser | null;
+  currentUser: CurrentUser | null;
   onLogout: () => void;
 };
-
-const Header: React.FC<HeaderProps> = ({ onOpenApiKeyModal, user, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ onOpenApiKeyModal, currentUser, onLogout }) => {
   return (
     <header className="bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -22,15 +20,12 @@ const Header: React.FC<HeaderProps> = ({ onOpenApiKeyModal, user, onLogout }) =>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {user ? (
+          <div className="flex items-center space-x-4">
+            {currentUser ? (
               <>
-                <div className="flex items-center text-sm text-gray-600">
-                  <UserCircle className="h-5 w-5 mr-1.5 text-gray-400" />
-                  <span>{user.email}</span>
-                </div>
-                <Button 
-                  onClick={onLogout} 
+                <span className="text-sm text-gray-600 hidden sm:inline">Welcome, {currentUser.email}</span>
+                <Button
+                  onClick={onLogout}
                   variant="outline"
                   size="sm"
                   icon={<LogOut className="h-4 w-4" />}
@@ -39,13 +34,13 @@ const Header: React.FC<HeaderProps> = ({ onOpenApiKeyModal, user, onLogout }) =>
                 </Button>
               </>
             ) : (
-              <Button 
-                onClick={onOpenApiKeyModal} 
+              <Button
+                onClick={onOpenApiKeyModal}
                 variant="outline"
                 size="sm"
                 icon={<Settings className="h-4 w-4" />}
               >
-                API Settings
+                API Settings (Legacy)
               </Button>
             )}
           </div>
